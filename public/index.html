@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>52 Region Drag and Drop</title>
+    <script src="./js/vue.global.js"></script>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="title-container">
+                <div class="title column">時間</div>
+                <div class="title column">00-02</div>
+                <div class="title column">02-04</div>
+                <div class="title column">04-06</div>
+                <div class="title column">06-08</div>
+                <div class="title column">08-10</div>
+                <div class="title column">10-12</div>
+                <div class="title column">12-14</div>
+                <div class="title column">14-16</div>
+                <div class="title column">16-18</div>
+                <div class="title column">18-20</div>
+                <div class="title column">20-22</div>
+                <div class="title column">22-24</div>
+            </div>
+            <div class="content-container">
+                <div class="content column">工作計畫</div>
+                <div class="content column" v-for="time in times" :key="time.id" @drop="dropWork" :time-id="time.id"
+                    @dragover.prevent @dragenter.prevent>
+
+                    <div class="work" v-for="work in time.works" :id="work.id" :key="work.id" draggable="true"
+                        @dragstart="dragStart($event, work)" :style="work.style">
+
+                        <div>{{work.start_time}}-{{work.end_time}}</div>
+                        <h4>{{work.title}}</h4>
+                        <div>{{statusArr[work.status]}}</div>
+                        <div>{{orderArr[work.order]}}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Vue.createApp({
+            data() {
+                return {
+                    works: [],
+                    times: [],
+                    statusArr: ["未處理", "處理中", "已完成"],
+                    orderArr: ["普通件", "速件", "最速件"]
+                }
+            },
+            methods: {
+                async fetchData() {
+                    let res = await fetch("http://localhost:8080/api/todos");
+                    let json = await res.json();
+                    this.works = json.map((x, _, arr) => {
+                        x.length = x.end_time - x.start_time;
+                        x.number = (x.number || 0);
+                        x.style = {
+                            "--length": x.length,
+                        }
+                        let arr1 = [...Array(x.length).keys()].map(z => z + parseInt(x.start_time));
+
+                        arr.filter(y => {
+                            if (x.id <= y.id) {
+                                return false;
+                            }
+                            let arr2 = [...Array(y.end_time - y.start_time).keys()].map(z => z + parseInt(y.start_time));
+                            return arr1.filter(x => arr2.includes(x)).length > 0;
+                        }).forEach(y => {
+                            y.number = (y.number || 0) + 1;
+                        });
+                        return x;
+                    });
+
+                    this.times = [];
+                    for (let i = 0; i < 12; i++) {
+                        let works = this.works.filter(x => x.start_time == i * 2);
+                        works.map((work, index) => {
+                            work.style["--number"] = (work.number || 0);
+                            return work;
+                        })
+                        this.times.push({
+                            id: i,
+                            start: (i * 2),
+                            end: ((i + 1) * 2),
+                            title: `${(i * 2).toString().padStart(2, '0')}-${((i + 1) * 2).toString().padStart(2, "0")}`,
+                            works: works
+                        })
+                    }
+                },
+                dragStart(event, work) {
+                    event.dataTransfer.dropEffect = 'move'
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('workID', work.id)
+                },
+                async dropWork(event) {
+                    const { target } = event;
+                    let id = event.dataTransfer.getData("workID");
+                    let work = this.works.find(x => x.id == id);
+                    let time = this.times[target.getAttribute("time-id")];
+                    if (time.start + work.length > 24) {
+                        return;
+                    }
+                    let workDOM = document.getElementById(id);
+                    workDOM.remove();
+                    event.target.appendChild(workDOM);
+                    let res = await fetch(`http://localhost:8080/api/todos/${id}`, {
+                        method: "POST",
+                        body: JSON.stringify({
+                            startTime: time.start
+                        }),
+                        headers: {
+                            "Content-Type": "application/json"
+                        }
+                    });
+                    let json = await res.json();
+                    if (json.success) {
+                        this.fetchData();
+                    }
+                }
+            },
+            mounted() {
+                this.fetchData();
+            }
+        }).mount("#app");
+    </script>
+</body>
+
+</html>
