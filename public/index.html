@@ -13,34 +13,23 @@
 <body>
     <div id="app">
         <div class="container">
-            <div class="title-container">
-                <div class="title column">時間</div>
-                <div class="title column">00-02</div>
-                <div class="title column">02-04</div>
-                <div class="title column">04-06</div>
-                <div class="title column">06-08</div>
-                <div class="title column">08-10</div>
-                <div class="title column">10-12</div>
-                <div class="title column">12-14</div>
-                <div class="title column">14-16</div>
-                <div class="title column">16-18</div>
-                <div class="title column">18-20</div>
-                <div class="title column">20-22</div>
-                <div class="title column">22-24</div>
+            <div class="row">
+                <div class="title">時間</div>
+                <div class="content">工作計畫</div>
             </div>
-            <div class="content-container">
-                <div class="content column">工作計畫</div>
-                <div class="content column" v-for="time in times" :key="time.id" @drop="dropWork" :time-id="time.id"
-                    @dragover.prevent @dragenter.prevent>
-
-                    <div class="work" v-for="work in time.works" :id="work.id" :key="work.id" draggable="true"
-                        @dragstart="dragStart($event, work)" :style="work.style">
-
-                        <div>{{work.start_time}}-{{work.end_time}}</div>
-                        <h4>{{work.title}}</h4>
-                        <div>{{statusArr[work.status]}}</div>
-                        <div>{{orderArr[work.order]}}</div>
-                    </div>
+            <div class="row" v-for="time in times" :key="time.id">
+                <div class="title">{{time.title}}</div>
+                <div class="content" @drop="dropWork" :time-id="time.id" @dragenter="dragEnter" @dragover.prevent>
+                    <transition-group>
+                        <div class="work" v-for="work in time.works" :id="work.id" :key="work.id" draggable="true"
+                            @dragstart="dragStart($event, work)" :style="work.style">
+    
+                            <div>{{work.start_time}}-{{work.end_time}}</div>
+                            <h4>{{work.title}}</h4>
+                            <div>{{statusArr[work.status]}}</div>
+                            <div>{{orderArr[work.order]}}</div>
+                        </div>
+                    </transition-group>
                 </div>
             </div>
         </div>
@@ -53,7 +42,8 @@
                     works: [],
                     times: [],
                     statusArr: ["未處理", "處理中", "已完成"],
-                    orderArr: ["普通件", "速件", "最速件"]
+                    orderArr: ["普通件", "速件", "最速件"],
+                    workID: 0
                 }
             },
             methods: {
@@ -100,18 +90,36 @@
                     event.dataTransfer.dropEffect = 'move'
                     event.dataTransfer.effectAllowed = 'move'
                     event.dataTransfer.setData('workID', work.id)
+                    this.workID = work.id;
                 },
                 async dropWork(event) {
                     const { target } = event;
                     let id = event.dataTransfer.getData("workID");
                     let work = this.works.find(x => x.id == id);
-                    let time = this.times[target.getAttribute("time-id")];
-                    if (time.start + work.length > 24) {
+                    let workDOM = document.getElementById(id);
+                    workDOM.classList.toggle("preview", false);
+                    if (!target.matches(".content")) {
+                        this.times = [];
+                        setTimeout(() => {
+                            this.fetchData();
+                        }, 16);
                         return;
                     }
-                    let workDOM = document.getElementById(id);
+                    let time = this.times.find(x => x.id == [target.getAttribute("time-id")]);
+                    if (time.start + work.length > 24) {
+                        this.times = [];
+                        setTimeout(() => {
+                            this.fetchData();
+                        }, 16);
+                        return;
+                    }
+                    let number = window.getComputedStyle(workDOM).getPropertyValue("--number");
                     workDOM.remove();
                     event.target.appendChild(workDOM);
+                    work.start_time = time.start;
+                    work.end_time = work.start_time + work.length; 
+                    work.style['--number'] = number;
+
                     let res = await fetch(`http://localhost:8080/api/todos/${id}`, {
                         method: "POST",
                         body: JSON.stringify({
@@ -122,9 +130,34 @@
                         }
                     });
                     let json = await res.json();
-                    if (json.success) {
-                        this.fetchData();
+                },
+                dragEnter(event) {
+                    event.preventDefault();
+                    console.error("dragEnter", event);
+                    let timeDOM = event.srcElement;
+                    let selector = `[id="${this.workID}"]`;
+                    if (!timeDOM.matches(".content")) {
+                        return;
                     }
+                    let workDOM = document.querySelector(selector);
+                    workDOM.classList.toggle("preview", true);
+                    let timeID = timeDOM.getAttribute("time-id");
+                    let time = this.times.find(x => x.id == timeID);
+                    let work = this.works.find(x => x.id == workDOM.id);
+                    if (time.works.indexOf(x => x == time) != -1) {
+                        return;
+                    }
+
+                    let arr1 = [...Array(work.length).keys()].map(z => z + parseInt(time.start));
+                    let number = this.works.filter(y => {
+                        if (y.id == work.id) {
+                            return false;
+                        }
+                        let arr2 = [...Array(y.end_time - y.start_time).keys()].map(z => z + parseInt(y.start_time));
+                        return arr1.filter(x => arr2.includes(x)).length > 0;
+                    }).length;
+                    workDOM.style.setProperty("--number", number);
+                    timeDOM.appendChild(workDOM);
                 }
             },
             mounted() {
