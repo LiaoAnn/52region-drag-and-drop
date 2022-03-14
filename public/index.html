@@ -23,7 +23,7 @@
                     <transition-group>
                         <div class="work" v-for="work in time.works" :id="work.id" :key="work.id" draggable="true"
                             @dragstart="dragStart($event, work)" :style="work.style">
-    
+
                             <div>{{work.start_time}}-{{work.end_time}}</div>
                             <h4>{{work.title}}</h4>
                             <div>{{statusArr[work.status]}}</div>
@@ -48,33 +48,38 @@
             },
             methods: {
                 async fetchData() {
+                    //#region 從後端拿到資料
                     let res = await fetch("http://localhost:8080/api/todos");
                     let json = await res.json();
+                    //#endregion
+
+                    //#region 分配工作排版 *有點問題
                     this.works = json.map((x, _, arr) => {
-                        x.length = x.end_time - x.start_time;
-                        x.number = (x.number || 0);
+                        x.length = x.end_time - x.start_time; //取得工作時長
+                        x.number = (x.number || 0); // 拿到工作橫向排名
                         x.style = {
                             "--length": x.length,
                         }
                         let arr1 = [...Array(x.length).keys()].map(z => z + parseInt(x.start_time));
-
                         arr.filter(y => {
                             if (x.id <= y.id) {
                                 return false;
                             }
                             let arr2 = [...Array(y.end_time - y.start_time).keys()].map(z => z + parseInt(y.start_time));
-                            return arr1.filter(x => arr2.includes(x)).length > 0;
+                            return arr1.filter(x => arr2.includes(x)).length > 0; //判斷是否交集
                         }).forEach(y => {
-                            y.number = (y.number || 0) + 1;
+                            y.number = (y.number || 0) + 1; //有交集的話橫向排名+1 (往右移動一個單位)
                         });
                         return x;
                     });
+                    //#endregion
 
+                    //#region 依照時間分類工作
                     this.times = [];
                     for (let i = 0; i < 12; i++) {
                         let works = this.works.filter(x => x.start_time == i * 2);
                         works.map((work, index) => {
-                            work.style["--number"] = (work.number || 0);
+                            work.style["--number"] = (work.number || 0); //將橫向排名寫在 style 裡面
                             return work;
                         })
                         this.times.push({
@@ -85,41 +90,43 @@
                             works: works
                         })
                     }
+                    //#endregion
                 },
                 dragStart(event, work) {
+                    //滑鼠開始拖拉
                     event.dataTransfer.dropEffect = 'move'
                     event.dataTransfer.effectAllowed = 'move'
                     event.dataTransfer.setData('workID', work.id)
                     this.workID = work.id;
                 },
                 async dropWork(event) {
-                    const { target } = event;
-                    let id = event.dataTransfer.getData("workID");
-                    let work = this.works.find(x => x.id == id);
-                    let workDOM = document.getElementById(id);
-                    workDOM.classList.toggle("preview", false);
-                    if (!target.matches(".content")) {
+                    //滑鼠結束拖拉
+                    const { target } = event; //拿到被放置的元件
+                    let id = event.dataTransfer.getData("workID"); //拿到工作 ID
+                    let work = this.works.find(x => x.id == id); //依照工作 ID 拿到工作物件
+                    let workDOM = document.getElementById(id); //拿到工作 DOM 元件
+                    workDOM.classList.toggle("preview", false); //把 preview 的 class 拿掉
+                    if (!target.matches(".content")) { //判斷被放置的物件是否為.content 的元件
                         this.times = [];
                         setTimeout(() => {
-                            this.fetchData();
+                            this.fetchData(); //如果不是的話就刷新資料
                         }, 16);
                         return;
                     }
-                    let time = this.times.find(x => x.id == [target.getAttribute("time-id")]);
-                    if (time.start + work.length > 24) {
+                    let time = this.times.find(x => x.id == [target.getAttribute("time-id")]); //拿到時間物件
+                    if (time.start + work.length > 24) { //判斷是否超出範圍
                         this.times = [];
                         setTimeout(() => {
-                            this.fetchData();
+                            this.fetchData(); //超出範圍的話就刷新資料
                         }, 16);
                         return;
                     }
-                    let number = window.getComputedStyle(workDOM).getPropertyValue("--number");
-                    workDOM.remove();
-                    event.target.appendChild(workDOM);
-                    work.start_time = time.start;
-                    work.end_time = work.start_time + work.length; 
-                    work.style['--number'] = number;
+                    workDOM.remove(); //移除 DOM 元件
+                    event.target.appendChild(workDOM); //重新掛載到被拖拉的元件
+                    work.start_time = time.start; //更新工作開始時間
+                    work.end_time = work.start_time + work.length; //更新工作結束時間
 
+                    //#region 更新後端資料
                     let res = await fetch(`http://localhost:8080/api/todos/${id}`, {
                         method: "POST",
                         body: JSON.stringify({
@@ -130,22 +137,23 @@
                         }
                     });
                     let json = await res.json();
+                    //#endregion
                 },
-                dragEnter(event) {
+                dragEnter(event) { 
+                    //當拖拉進新的原件
                     event.preventDefault();
-                    console.error("dragEnter", event);
-                    let timeDOM = event.srcElement;
-                    let selector = `[id="${this.workID}"]`;
-                    if (!timeDOM.matches(".content")) {
-                        return;
+                    let timeDOM = event.srcElement; //拿到被拖拉的元件
+                    let selector = `[id="${this.workID}"]`; 
+                    if (!timeDOM.matches(".content")) { //判斷是否為.content 元件
+                        return; //不是的話就離開
                     }
-                    let workDOM = document.querySelector(selector);
-                    workDOM.classList.toggle("preview", true);
-                    let timeID = timeDOM.getAttribute("time-id");
-                    let time = this.times.find(x => x.id == timeID);
-                    let work = this.works.find(x => x.id == workDOM.id);
-                    if (time.works.indexOf(x => x == time) != -1) {
-                        return;
+                    let workDOM = document.querySelector(selector); //拿到被拖拉的 DOM 元件
+                    workDOM.classList.toggle("preview", true); //加入 preview 的 class
+                    let timeID = timeDOM.getAttribute("time-id"); //拿到時間ID
+                    let time = this.times.find(x => x.id == timeID); //拿到時間物件
+                    let work = this.works.find(x => x.id == workDOM.id); //拿到工作物件
+                    if (time.works.indexOf(x => x == time) != -1) { //判斷該工作是否原本就在那時間裡面
+                        return; //在的話就離開
                     }
 
                     let arr1 = [...Array(work.length).keys()].map(z => z + parseInt(time.start));
@@ -154,10 +162,10 @@
                             return false;
                         }
                         let arr2 = [...Array(y.end_time - y.start_time).keys()].map(z => z + parseInt(y.start_time));
-                        return arr1.filter(x => arr2.includes(x)).length > 0;
-                    }).length;
-                    workDOM.style.setProperty("--number", number);
-                    timeDOM.appendChild(workDOM);
+                        return arr1.filter(x => arr2.includes(x)).length > 0; //判斷是否交集
+                    }).length; //取得跟幾個工作重疊
+                    work.style["--number"] = number; //更新橫向排名
+                    timeDOM.appendChild(workDOM); //掛載譽懶的工作
                 }
             },
             mounted() {
