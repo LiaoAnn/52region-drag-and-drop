@@ -1,5 +1,4 @@
 const express = require("express");
-const bodyParser = require("body-parser");
 const api = require("./api");
 const ADDRESS = "0.0.0.0";
 const PORT = 8080;
