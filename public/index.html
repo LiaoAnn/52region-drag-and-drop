@@ -60,38 +60,18 @@
                     this.map = [...Array(12).keys()].map(x => [...Array(json.length).keys()].map(y => 0));
                     this.works = json.map(x => {
                         x.length = x.end_time - x.start_time; //取得工作時長
-                        x.order = (x.order || 0); // 拿到工作橫向排名
                         x.style = {
                             "--length": x.length,
+                            "--order": x.order
                         }
                         return x;
                     })
                         .sort((a, b) => a.length - b.length)
                         .map(x => {
-                            let order = -1;
                             let startIndex = Math.floor(x.start_time / 2);
-                            for (let i = 0; i < json.length; i++) {
-                                let flag = true;
-                                for (let j = 0; j < x.length / 2; j++) {
-                                    if (this.map[j + startIndex][i] != 0) {
-                                        flag = false;
-                                    }
-                                    if (flag && j == x.length / 2 - 1) {
-                                        order = Math.max(order, i);
-                                    }
-                                    if (!flag) {
-                                        continue;
-                                    }
-                                }
-                                if (order != -1) {
-                                    break;
-                                }
-                            }
                             for (let i = startIndex; i < startIndex + x.length / 2; i++) {
-                                this.map[i][order] = x.id;
+                                this.map[i][x.order] = x.id;
                             }
-                            x.order = order;
-                            x.style["--order"] = order;
                             return x;
                         });
                     //#endregion

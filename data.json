@@ -7,8 +7,9 @@
         "start_time": "12",
         "end_time": "18",
         "status": 0,
-        "order": 0,
-        "description": "Get the first place of competition."
+        "weight": 0,
+        "description": "Get the first place of competition.",
+        "order": 1
     },
     {
         "id": 2,
@@ -18,8 +19,9 @@
         "start_time": "16",
         "end_time": "18",
         "status": 0,
-        "order": 0,
-        "description": "aaaaa."
+        "weight": 0,
+        "description": "aaaaa.",
+        "order": 0
     },
     {
         "id": 3,
@@ -29,7 +31,8 @@
         "start_time": "14",
         "end_time": "20",
         "status": 0,
-        "order": 0,
-        "description": "aaaaa."
+        "weight": 0,
+        "description": "aaaaa.",
+        "order": 0
     }
 ]
