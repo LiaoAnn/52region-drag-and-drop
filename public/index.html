@@ -57,34 +57,49 @@
                     //#endregion
 
                     //#region 分配工作排版 *有點問題
-                    this.works = json.map((x, _, arr) => {
+                    this.map = [...Array(12).keys()].map(x => [...Array(json.length).keys()].map(y => 0));
+                    this.works = json.map(x => {
                         x.length = x.end_time - x.start_time; //取得工作時長
                         x.order = (x.order || 0); // 拿到工作橫向排名
                         x.style = {
                             "--length": x.length,
                         }
-                        let arr1 = [...Array(x.length).keys()].map(z => z + parseInt(x.start_time));
-                        arr.filter(y => {
-                            if (x.id <= y.id) {
-                                return false;
-                            }
-                            let arr2 = [...Array(y.end_time - y.start_time).keys()].map(z => z + parseInt(y.start_time));
-                            return arr1.filter(x => arr2.includes(x)).length > 0; //判斷是否交集
-                        }).forEach(y => {
-                            y.order = (y.order || 0) + 1; //有交集的話橫向排名+1 (往右移動一個單位)
-                        });
                         return x;
-                    });
+                    })
+                        .sort((a, b) => a.length - b.length)
+                        .map(x => {
+                            let order = -1;
+                            let startIndex = Math.floor(x.start_time / 2);
+                            for (let i = 0; i < json.length; i++) {
+                                let flag = true;
+                                for (let j = 0; j < x.length / 2; j++) {
+                                    if (this.map[j + startIndex][i] != 0) {
+                                        flag = false;
+                                    }
+                                    if (flag && j == x.length / 2 - 1) {
+                                        order = Math.max(order, i);
+                                    }
+                                    if (!flag) {
+                                        continue;
+                                    }
+                                }
+                                if (order != -1) {
+                                    break;
+                                }
+                            }
+                            for (let i = startIndex; i < startIndex + x.length / 2; i++) {
+                                this.map[i][order] = x.id;
+                            }
+                            x.order = order;
+                            x.style["--order"] = order;
+                            return x;
+                        });
                     //#endregion
 
                     //#region 依照時間分類工作
                     this.times = [];
                     for (let i = 0; i < 12; i++) {
                         let works = this.works.filter(x => x.start_time == i * 2);
-                        works.map((work, index) => {
-                            work.style["--order"] = (work.order || 0); //將橫向排名寫在 style 裡面
-                            return work;
-                        })
                         this.times.push({
                             id: i,
                             start: (i * 2),
@@ -142,11 +157,12 @@
                     let json = await res.json();
                     //#endregion
                 },
-                dragEnter(event) { 
+                dragEnter(event) {
+                    let newMap = this.map.map(m => [...m]);
                     //當拖拉進新的原件
                     event.preventDefault();
                     let timeDOM = event.srcElement; //拿到被拖拉的元件
-                    let selector = `[id="${this.workID}"]`; 
+                    let selector = `[id="${this.workID}"]`;
                     if (!timeDOM.matches(".content")) { //判斷是否為.content 元件
                         return; //不是的話就離開
                     }
@@ -159,14 +175,28 @@
                         return; //在的話就離開
                     }
 
-                    let arr1 = [...Array(work.length).keys()].map(z => z + parseInt(time.start));
-                    let order = this.works.filter(y => {
-                        if (y.id == work.id) {
-                            return false;
+                    let order = -1;
+                    let startIndex = Math.floor(work.start_time / 2);
+                    for (let i = 0; i < this.works.length; i++) {
+                        let flag = true;
+                        for (let j = 0; j < work.length / 2; j++) {
+                            if (newMap[j + startIndex][i] != 0) {
+                                console.log("row: ", j + startIndex);
+                                console.log("col: ", i);
+                                flag = false;
+                            }
+                            if (flag && j == work.length / 2 - 1) {
+                                order = Math.max(order, i);
+                            }
+                            if (!flag) {
+                                continue;
+                            }
                         }
-                        let arr2 = [...Array(y.end_time - y.start_time).keys()].map(z => z + parseInt(y.start_time));
-                        return arr1.filter(x => arr2.includes(x)).length > 0; //判斷是否交集
-                    }).length; //取得跟幾個工作重疊
+                        if (order != -1) {
+                            break;
+                        }
+                    }
+                    work.order = order;
                     work.style["--order"] = order; //更新橫向排名
                     timeDOM.appendChild(workDOM); //掛載譽懶的工作
                 }
