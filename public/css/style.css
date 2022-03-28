@@ -54,7 +54,7 @@ body {
     z-index: 100;
     width: var(--work-width);
     height: calc(var(--length) / 2 * var(--row-height));
-    left: calc(var(--number) * calc(var(--work-width) + 1em));
+    left: calc(var(--order) * calc(var(--work-width) + 1em));
 }
 
 .preview {

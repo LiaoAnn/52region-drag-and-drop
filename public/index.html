@@ -39,24 +39,27 @@
         Vue.createApp({
             data() {
                 return {
+                    port: 4000,
+                    address: "localhost",
                     works: [],
                     times: [],
                     statusArr: ["未處理", "處理中", "已完成"],
                     orderArr: ["普通件", "速件", "最速件"],
-                    workID: 0
+                    workID: 0,
+                    map: []
                 }
             },
             methods: {
                 async fetchData() {
                     //#region 從後端拿到資料
-                    let res = await fetch("http://localhost:8080/api/todos");
+                    let res = await fetch(`http://${this.address}:${this.port}/api/todos`);
                     let json = await res.json();
                     //#endregion
 
                     //#region 分配工作排版 *有點問題
                     this.works = json.map((x, _, arr) => {
                         x.length = x.end_time - x.start_time; //取得工作時長
-                        x.number = (x.number || 0); // 拿到工作橫向排名
+                        x.order = (x.order || 0); // 拿到工作橫向排名
                         x.style = {
                             "--length": x.length,
                         }
@@ -68,7 +71,7 @@
                             let arr2 = [...Array(y.end_time - y.start_time).keys()].map(z => z + parseInt(y.start_time));
                             return arr1.filter(x => arr2.includes(x)).length > 0; //判斷是否交集
                         }).forEach(y => {
-                            y.number = (y.number || 0) + 1; //有交集的話橫向排名+1 (往右移動一個單位)
+                            y.order = (y.order || 0) + 1; //有交集的話橫向排名+1 (往右移動一個單位)
                         });
                         return x;
                     });
@@ -79,7 +82,7 @@
                     for (let i = 0; i < 12; i++) {
                         let works = this.works.filter(x => x.start_time == i * 2);
                         works.map((work, index) => {
-                            work.style["--number"] = (work.number || 0); //將橫向排名寫在 style 裡面
+                            work.style["--order"] = (work.order || 0); //將橫向排名寫在 style 裡面
                             return work;
                         })
                         this.times.push({
@@ -127,7 +130,7 @@
                     work.end_time = work.start_time + work.length; //更新工作結束時間
 
                     //#region 更新後端資料
-                    let res = await fetch(`http://localhost:8080/api/todos/${id}`, {
+                    let res = await fetch(`http://${this.address}:${this.port}/api/todos/${id}`, {
                         method: "POST",
                         body: JSON.stringify({
                             startTime: time.start
@@ -157,14 +160,14 @@
                     }
 
                     let arr1 = [...Array(work.length).keys()].map(z => z + parseInt(time.start));
-                    let number = this.works.filter(y => {
+                    let order = this.works.filter(y => {
                         if (y.id == work.id) {
                             return false;
                         }
                         let arr2 = [...Array(y.end_time - y.start_time).keys()].map(z => z + parseInt(y.start_time));
                         return arr1.filter(x => arr2.includes(x)).length > 0; //判斷是否交集
                     }).length; //取得跟幾個工作重疊
-                    work.style["--number"] = number; //更新橫向排名
+                    work.style["--order"] = order; //更新橫向排名
                     timeDOM.appendChild(workDOM); //掛載譽懶的工作
                 }
             },
