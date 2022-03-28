@@ -45,7 +45,7 @@
                     times: [],
                     statusArr: ["未處理", "處理中", "已完成"],
                     orderArr: ["普通件", "速件", "最速件"],
-                    workID: 0,
+                    dragWork: 0,
                     map: []
                 }
             },
@@ -56,8 +56,7 @@
                     let json = await res.json();
                     //#endregion
 
-                    //#region 分配工作排版 *有點問題
-                    this.map = [...Array(12).keys()].map(x => [...Array(json.length).keys()].map(y => 0));
+                    //#region 分配工作排版
                     this.works = json.map(x => {
                         x.length = x.end_time - x.start_time; //取得工作時長
                         x.style = {
@@ -65,15 +64,8 @@
                             "--order": x.order
                         }
                         return x;
-                    })
-                        .sort((a, b) => a.length - b.length)
-                        .map(x => {
-                            let startIndex = Math.floor(x.start_time / 2);
-                            for (let i = startIndex; i < startIndex + x.length / 2; i++) {
-                                this.map[i][x.order] = x.id;
-                            }
-                            return x;
-                        });
+                    });
+                    this.map = this.getNewMap(this.works);
                     //#endregion
 
                     //#region 依照時間分類工作
@@ -95,7 +87,11 @@
                     event.dataTransfer.dropEffect = 'move'
                     event.dataTransfer.effectAllowed = 'move'
                     event.dataTransfer.setData('workID', work.id)
-                    this.workID = work.id;
+                    this.dragWork = work;
+                    //清空map
+                    for (let i = 0; i < work.length / 2; i++) {
+                        this.map[i + Math.floor(work.start_time / 2)][work.order] = 0;
+                    }
                 },
                 async dropWork(event) {
                     //滑鼠結束拖拉
@@ -111,61 +107,58 @@
                         }, 16);
                         return;
                     }
+
                     let time = this.times.find(x => x.id == [target.getAttribute("time-id")]); //拿到時間物件
-                    if (time.start + work.length > 24) { //判斷是否超出範圍
-                        this.times = [];
-                        setTimeout(() => {
-                            this.fetchData(); //超出範圍的話就刷新資料
-                        }, 16);
-                        return;
-                    }
-                    workDOM.remove(); //移除 DOM 元件
-                    event.target.appendChild(workDOM); //重新掛載到被拖拉的元件
                     work.start_time = time.start; //更新工作開始時間
                     work.end_time = work.start_time + work.length; //更新工作結束時間
+                    if (work.end_time > 24) { //判斷是否超出範圍
+                        work.end_time = 24; //超出範圍的話將結束時間設為最大
+                        work.start_time = 24 - work.length; //開始時間為結束時間減去工作時長
+                    }
 
                     //#region 更新後端資料
                     let res = await fetch(`http://${this.address}:${this.port}/api/todos/${id}`, {
                         method: "POST",
                         body: JSON.stringify({
-                            startTime: time.start
+                            startTime: work.start_time, //更新工作開始時間
+                            order: work.order //更新橫向排名
                         }),
                         headers: {
                             "Content-Type": "application/json"
                         }
                     });
                     let json = await res.json();
+                    this.map = this.getNewMap(this.works);
                     //#endregion
                 },
                 dragEnter(event) {
-                    let newMap = this.map.map(m => [...m]);
                     //當拖拉進新的原件
                     event.preventDefault();
                     let timeDOM = event.srcElement; //拿到被拖拉的元件
-                    let selector = `[id="${this.workID}"]`;
                     if (!timeDOM.matches(".content")) { //判斷是否為.content 元件
                         return; //不是的話就離開
                     }
-                    let workDOM = document.querySelector(selector); //拿到被拖拉的 DOM 元件
+                    let workDOM = document.querySelector(`[id="${this.dragWork.id}"]`); //拿到被拖拉的 DOM 元件
                     workDOM.classList.toggle("preview", true); //加入 preview 的 class
-                    let timeID = timeDOM.getAttribute("time-id"); //拿到時間ID
-                    let time = this.times.find(x => x.id == timeID); //拿到時間物件
+                    let time = this.times.find(x => x.id == timeDOM.getAttribute("time-id")); //拿到時間物件
                     let work = this.works.find(x => x.id == workDOM.id); //拿到工作物件
-                    if (time.works.indexOf(x => x == time) != -1) { //判斷該工作是否原本就在那時間裡面
-                        return; //在的話就離開
+
+                    work.start_time = time.start; //更新工作開始時間
+                    work.end_time = time.start + work.length; //更新工作結束時間
+                    if (work.end_time > 24) { //判斷有沒有超出範圍
+                        work.end_time = 24; //超出範圍的話將結束時間設為最大
+                        work.start_time = 24 - work.length; //開始時間為結束時間減去工作時長
                     }
 
-                    let order = -1;
-                    let startIndex = Math.floor(work.start_time / 2);
+                    //#region 重新獲取橫向排名
+                    let order = -1; 
                     for (let i = 0; i < this.works.length; i++) {
                         let flag = true;
-                        for (let j = 0; j < work.length / 2; j++) {
-                            if (newMap[j + startIndex][i] != 0) {
-                                console.log("row: ", j + startIndex);
-                                console.log("col: ", i);
+                        for (let j = time.start / 2; j < (work.length + time.start) / 2; j++) {
+                            if (this.map[j][i] != 0) {
                                 flag = false;
                             }
-                            if (flag && j == work.length / 2 - 1) {
+                            if (flag && j == (work.length + time.start) / 2 - 1) {
                                 order = Math.max(order, i);
                             }
                             if (!flag) {
@@ -176,9 +169,21 @@
                             break;
                         }
                     }
-                    work.order = order;
-                    work.style["--order"] = order; //更新橫向排名
-                    timeDOM.appendChild(workDOM); //掛載譽懶的工作
+                    //#endregion
+
+                    work.order = order; //更新橫向排名
+                    work.style["--order"] = order; //更新橫向排名(同時更新 workDOM 的 style)
+                    timeDOM.appendChild(workDOM); //掛載預覽的工作
+                    this.dragWork = work;
+                },
+                getNewMap(works) {
+                    let map = [...Array(12).keys()].map(x => [...Array(works.length).keys()].map(y => 0));
+                    works.forEach(work => {
+                        for (let i = 0; i < work.length / 2; i++) {
+                            map[i + Math.floor(work.start_time / 2)][work.order] = work.id;
+                        }
+                    });
+                    return map;
                 }
             },
             mounted() {
