@@ -92,6 +92,11 @@
                     for (let i = 0; i < work.length / 2; i++) {
                         this.map[i + Math.floor(work.start_time / 2)][work.order] = 0;
                     }
+                    //將其他工作設為不可拖拉進去
+                    let eles = document.querySelectorAll(`.work:not(#\\3${work.id})`);
+                    eles.forEach(ele => {
+                        ele.style.pointerEvents = "none";
+                    })
                 },
                 async dropWork(event) {
                     //滑鼠結束拖拉
@@ -115,6 +120,12 @@
                         work.end_time = 24; //超出範圍的話將結束時間設為最大
                         work.start_time = 24 - work.length; //開始時間為結束時間減去工作時長
                     }
+
+                    //將其他工作設為正常
+                    let eles = document.querySelectorAll(`.work:not(#\\3${work.id})`)
+                    eles.forEach(ele => {
+                        ele.style.pointerEvents = "unset";
+                    })
 
                     //#region 更新後端資料
                     let res = await fetch(`http://${this.address}:${this.port}/api/todos/${id}`, {
