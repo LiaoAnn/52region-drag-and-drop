@@ -34,6 +34,7 @@ router.post("/todos/:workID", (req, res) => {
     let length = work.end_time - work.start_time;
     work.start_time = req.body.startTime;
     work.end_time = work.start_time + length;
+    work.order = req.body.order;
     res.json({
         success: true
     });
